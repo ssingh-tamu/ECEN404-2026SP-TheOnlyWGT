@@ -1,0 +1,4 @@
+Generate waveform:
+-> iverilog -o test.out tb_{test}.v {test}.v   (compile)
+-> vvp test.out                                (simulate)
+-> gtkwave waveform.vcd                        (view waveform)

@@ -16,48 +16,37 @@
 // When CS goes high, a decoded pulse is generated
 
 module spi_peripheral (
-    input  wire       clk_sys,                 // system clock
-    input  wire       rstn,                    // system reset
-    input  wire       sclk,                    // SPI clock
-    input  wire       mosi,                    // SPI data in
-    input  wire       cs_n,                    // SPI chip select
-    output reg [2:0]  opcode,                  // first three bits of message
-    output reg [31:0] spi_out                  // other 32 bits of message
+    input  wire       clk_sys,       // system clock
+    input  wire       rstn,          // system reset
+    input  wire       sclk,          // SPI clock
+    input  wire       mosi,          // SPI data in
+    input  wire       cs_n,          // SPI chip select
+    output reg [2:0]  opcode,        // first three bits of message
+    output reg [31:0] spi_out        // other 32 bits of message
 );
 
-    reg [95:0] shift_reg;
-    reg [6:0]  bit_cnt;
+    reg [34:0] shift_reg;
 
     always @(negedge sclk or negedge rstn) begin
         if (!rstn) begin
-            shift_reg <= 96'd0;
-            bit_cnt   <= 7'd0;
+            shift_reg <= 35'b0;
         end else if (!cs_n) begin
-            shift_reg <= {shift_reg[94:0], mosi};
-            bit_cnt   <= bit_cnt + 1'b1;
+            shift_reg <= {shift_reg[33:0], mosi};
         end
     end
 
     // On CS rising, decode frame
     always @(posedge cs_n or negedge rstn) begin
         if (!rstn) begin
-            opcode                 <= 3'b110;  // unused value so that nothing is active
-            spi_out                <= 32'd0;
-            shift_reg              <= 96'd0;
-            bit_cnt                <= 7'd0;
+            opcode  <= 3'b110;  // unused value so that nothing is active
+            spi_out <= 32'b0;
         end else begin
-            opcode                 <= 3'b110;
-
-            if (bit_cnt == 35) begin
-                opcode  <= shift_reg[bit_cnt-1 -: 3];
-                spi_out <= shift_reg[bit_cnt-4 -: 32];
-            end
-
-            shift_reg <= 96'd0;
-            bit_cnt   <= 7'd0;
+            opcode  <= shift_reg[34:32];
+            spi_out <= shift_reg[31:0];
         end
     end
 endmodule
+
 
 //=====================================================
 // sram_controller.v
@@ -198,7 +187,8 @@ module top_system (
     output wire        dac0_clock,
     output wire        dac1_clock,
     // LED Outputs
-    output wire        opp_led
+    output wire        err0_led,
+    output wire        err1_led
 );
 
     // SPI signals
@@ -295,7 +285,11 @@ module top_system (
         .square(dac1_clock)
     );
 
-    // LEDs
-    assign opp_led = (opcode != 3'b111);
+    // LEDs //
+    // Both LEDS on = error or stopped
+    // One LED on = configuring channel 0 or 1
+    // No LEDs on = running
+    assign err0_led = (opcode == 3'b000 || opcode == 3'b010 || opcode == 3'b100 || opcode == 3'b110);
+    assign err1_led = (opcode == 3'b001 || opcode == 3'b011 || opcode == 3'b101 || opcode == 3'b110);
 
 endmodule

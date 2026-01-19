@@ -15,7 +15,8 @@ module tb_top;
     wire        sram1_we_n;
     wire        dac0_clock;
     wire        dac1_clock;
-    wire        opp_led;
+    wire        err0_led;
+    wire        err1_led;
 
     top_system uut (
         .clk_sys(clk_sys),
@@ -31,7 +32,8 @@ module tb_top;
         .sram1_we_n(sram1_we_n),
         .dac0_clock(dac0_clock),
         .dac1_clock(dac1_clock),
-        .opp_led(opp_led)
+        .err0_led(err0_led),
+        .err1_led(err1_led)
     );
 
     // Clock generation
@@ -65,18 +67,21 @@ module tb_top;
         rstn = 1;
 
         // {opcode, addr, data}
-        send_spi_frame({3'b010, 16'h0006, 16'hABCD});  // set reset0 to 6
-        send_spi_frame({3'b011, 16'h0005, 16'hABCD});  // set reset1 to 5
-        send_spi_frame({3'b100, 16'h0FFF, 16'hFFFF});  // set phase0 to h0FFFFFFF
-        send_spi_frame({3'b101, 16'h02FF, 16'hFFFF});  // set phase1 to h02FFFFFF
-        send_spi_frame({3'b000, 16'h5678, 16'hEFAA});  // set sram0 address h5678 to hEFAA
-        send_spi_frame({3'b000, 16'h1234, 16'hABEF});  // set sram0 address h1234 to hABEF
-        send_spi_frame({3'b001, 16'h1234, 16'hABCD});  // set sram1 address h1234 to hABCD
-        send_spi_frame({3'b010, 16'h0001, 16'hABCD});  // set reset0 to 1
-        send_spi_frame({3'b001, 16'h1234, 16'hABCD});  // spacer
-        send_spi_frame({3'b100, 16'h07FF, 16'hFFFF});  // set phase0 to h07FFFFFF
-        send_spi_frame({3'b010, 16'h0020, 16'hABCD});  // set reset0 to 32
-        send_spi_frame({3'b001, 16'h1234, 16'hABCD});  // spacer
+        // send_spi_frame({3'b010, 16'h0006, 16'hABCD});  // set reset0 to 6
+        send_spi_frame({3'b010, 16'h0001, 16'hABCD}); 
+
+        // send_spi_frame({3'b011, 16'h0005, 16'hABCD});  // set reset1 to 5
+        // send_spi_frame({3'b100, 16'h0FFF, 16'hFFFF});  // set phase0 to h0FFFFFFF
+        send_spi_frame({3'b100, 16'h7FFF, 16'hFFFF});
+        // send_spi_frame({3'b101, 16'h02FF, 16'hFFFF});  // set phase1 to h02FFFFFF
+        // send_spi_frame({3'b000, 16'h5678, 16'hEFAA});  // set sram0 address h5678 to hEFAA
+        // send_spi_frame({3'b000, 16'h1234, 16'hABEF});  // set sram0 address h1234 to hABEF
+        // send_spi_frame({3'b001, 16'h1234, 16'hABCD});  // set sram1 address h1234 to hABCD
+        // send_spi_frame({3'b010, 16'h0001, 16'hABCD});  // set reset0 to 1
+        // send_spi_frame({3'b001, 16'h1234, 16'hABCD});  // spacer
+        // send_spi_frame({3'b100, 16'h07FF, 16'hFFFF});  // set phase0 to h07FFFFFF
+        // send_spi_frame({3'b010, 16'h0020, 16'hABCD});  // set reset0 to 32
+        // send_spi_frame({3'b001, 16'h1234, 16'hABCD});  // spacer
         send_spi_frame({3'b111, 16'hAAAA, 16'hAAAA});  // run
 
         #5000;
