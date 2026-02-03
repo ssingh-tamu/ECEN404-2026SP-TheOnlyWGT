@@ -7,13 +7,29 @@
 
 using namespace std;
 
-void sendFrame(string);
+void sendFrame(string); // final remove
+
+// FPGA SPI communication functions
+
+void sendBits(int, int);
+void setMemory(bool, int, int);
+void setReset(bool, int);
+void setTuningWord(bool, int);
+void run();
+
+// Waveform creation functions
+
 void createSin(bool, int, int, int);
 void createSnc(bool, int, int, int);
-void createSaw(bool, int);
+void createSaw(bool, int); // final remove
 void createTri(bool, int, int, int);
 void createSqu(bool, int, int, int);
+
+// Main function to set all parameters and create waveform
+
 void setAll(int, int, int, int, bool);
+
+// MCU pin definitions
 
 #define mosi 10
 #define rstn 11
@@ -62,13 +78,32 @@ void sendFrame(string frame) {
 
 }
 
+// sends number to FPGA via SPI
+// - num is a number in decimal
+// - len is number of bits (3, 16, or 32)
+// - should only be called by set memory, reset, and tuning word functions
+void sendBits(int len, int num) {
+  for (int i = len-1; i >= 0; i--) {
+    if (num >= (1 << i)) {
+      num -= (1 << i);
+      digitalWrite(mosi, HIGH);
+    } else {
+      digitalWrite(mosi, LOW);
+    }
+    digitalWrite(sclk, HIGH);
+    delayMicroseconds(1);
+    digitalWrite(sclk, LOW);
+    delayMicroseconds(1);
+  }
+}
+
 void setMemory(bool channel, int address, int value) {
   digitalWrite(cs_n, LOW);
   sendBits(3, channel ? 1 : 0);
   sendBits(16, address);
   sendBits(16, value);
   digitalWrite(cs_n, HIGH);
-  delayMicroseconds(20);
+  // delayMicroseconds(5);
 }
 
 void setReset(bool channel, int reset) {
@@ -77,77 +112,57 @@ void setReset(bool channel, int reset) {
   sendBits(16, reset);
   sendBits(16, 0);
   digitalWrite(cs_n, HIGH);
-  delayMicroseconds(20);
+  // delayMicroseconds(5);
 }
 
 void setTuningWord(bool channel, int tuningWord) {
   digitalWrite(cs_n, LOW);
   sendBits(3, channel ? 5 : 4);
-  sendBits(32, tuningWord);
+  sendBits(16, tuningWord >> 16);
+  sendBits(16, tuningWord % (1 << 16));
   digitalWrite(cs_n, HIGH);
-  delayMicroseconds(20);
+  // delayMicroseconds(5);
 }
 
-// sends number to FPGA via SPI
-// - num is a number in decimal
-// - len is number of bits (3, 16, or 32)
-void sendBits(int len, int num) {
-  for (int i = len; i >= 0; i--) {
-    if (num > 2^i) {
-      num -= 2^i;
-      digitalWrite(mosi, HIGH);
-    } else {
-      digitalWrite(mosi, LOW);
-    }
-    digitalWrite(sclk, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(sclk, LOW);
-    delayMicroseconds(10);
-  }
+void run() {
+  digitalWrite(cs_n, LOW);
+  sendBits(3, 7);
+  sendBits(16, 0);
+  sendBits(16, 0);
+  digitalWrite(cs_n, HIGH);
+  // delayMicroseconds(10);
 }
 
 // creates sin wave by writing amplitude values to memory values [0, width)
 // - SRAM0 - channel = false, SRAM1 - channel = true
 // - width must be between [1, 65536]
 void createSin(bool channel, int width, int amplitude, int offset) {
-  if (width > 65536) {
-    return;
-  }
+  if (width > 65536) return;
 
   double inc = 2*M_PI/width;
-  char chanHex = channel ? '1' : '0';
   for (int i = 0; i < width; i++) {
-    int dec = (sin(inc*i)*amplitude+offset*2+10000)*65535/20000;
+    // int dec = (sin(inc*i)*amplitude+offset*2+10000)*65535/20000;
+    int dec = (sin(inc*i)*0.5+0.5)*65535;
     if (dec > 65535) dec = 65535;
     else if (dec < 0) dec = 0;
 
-    stringstream ss;
-    ss << chanHex << uppercase << setfill('0') << setw(4) << hex << i << setw(4) << hex << dec;
-  
-    sendFrame(ss.str());
+    setMemory(channel, i, dec);
   }
 }
-
 
 // creates sinc wave by writing amplitude values to memory values [0, width)
 // - SRAM0 - channel = false, SRAM1 - channel = true
 // - width must be between [1, 65536]
 void createSnc(bool channel, int width, int amplitude, int offset) {
-  if (width > 65536) {
-    return;
-  }
+  if (width > 65536) return;
 
   double inc = 14.06619*2/width;
-  char chanHex = channel ? '1' : '0';
   for (int i = 0; i < width; i++) {
     int dec = (sin(inc*i-14.06619)*amplitude/(inc*i-14.06619)+offset*2+10000)*65535/20000;
     if (dec > 65535) dec = 65535;
     else if (dec < 0) dec = 0;
 
-    stringstream ss;
-    ss << chanHex << uppercase << setfill('0') << setw(4) << hex << i << setw(4) << hex << dec;
-  
-    sendFrame(ss.str());
+    setMemory(channel, i, dec);
   }
 }
 
@@ -155,18 +170,11 @@ void createSnc(bool channel, int width, int amplitude, int offset) {
 // - SRAM0 - channel = false, SRAM1 - channel = true
 // - width must be between [1, 65536]
 void createSaw(bool channel, int width) {
-  if (width > 65536) {
-    return;
-  }
+  if (width > 65536) return;
   
-  char chanHex = channel ? '1' : '0';
   for (int i = 0; i < width; i++) {
     int dec = i*65535/(width-1);
-    
-    stringstream ss;
-    ss << chanHex << uppercase << setfill('0') << setw(4) << hex << i << setw(4) << hex << dec;
-  
-    sendFrame(ss.str());
+    setMemory(channel, i, dec);
   }
 }
 
@@ -174,57 +182,43 @@ void createSaw(bool channel, int width) {
 // - SRAM0 - channel = false, SRAM1 - channel = true
 // - width must be between [1, 65536]
 void createTri(bool channel, int width, int amplitude, int offset) {
-  if (width > 65536) {
-    return;
-  }
+  if (width > 65536) return;
   
-  if (channel) sendFrame("100000000"); else sendFrame("000000000");
-    
-  char chanHex = channel ? '1' : '0';
+  setMemory(channel, 0, 32678-3.2678*amplitude+6.5535*offset);
   for (int i = 0; i < width/2; i++) {
-    int dec = 2*(i+1)*65535/width;
+    int dec = 2*(i+1)*6.5535*amplitude/width + 32678 - 3.2678*amplitude + 6.5535*offset;
+    if (dec > 65535) dec = 65535;
+    else if (dec < 0) dec = 0;
 
-    stringstream sf;
-    stringstream sb;
-    sf << chanHex << uppercase << setfill('0') << setw(4) << hex << (i+1) << setw(4) << hex << dec;
-    sb << chanHex << uppercase << setfill('0') << setw(4) << hex << (width-1-i) << setw(4) << hex << dec;
-
-    sendFrame(sf.str());
-    sendFrame(sb.str());
+    setMemory(channel, i+1, dec);
+    setMemory(channel, width-1-i, dec);
   }
 }
 
 // creates a square wave
 // - SRAM0 - channel = false, SRAM1 - channel = true
 void createSqu(bool channel, int frequency, int amplitude, int offset) {
-  if (channel) sendFrame("30001FFFF"); else sendFrame("20001FFFF");
+  setReset(channel, 1);
 
-  int stw = frequency*2*(2^32)/100000000000;
-  char chanHex = channel ? '5' : '4';
-  stringstream sss;
-  sss << chanHex << uppercase << setfill('0') << setw(8) << hex << stw;
-  sendFrame(sss.str());
+  // int stw = frequency*2*(1 << 31)/100000000000;
+  int stw = frequency*0.042949673;
+  setTuningWord(channel, stw);
   
-  chanHex = channel ? '1' : '0';
-  int top = (10000*2^15+amplitude*2^15+offset*2^16)/10000;
+  int top = (10000*32768+amplitude*32768+offset*65536)/10000;
   if (top > 65535) top = 65535;
   else if (top < 0) top = 0;  
-  int bot = (10000*2^15-amplitude*2^15+offset*2^16)/10000;
+  int bot = (10000*32768-amplitude*32768+offset*65536)/10000;
   if (bot > 65535) bot = 65535;
   else if (bot < 0) bot = 0;
 
-  stringstream st;
-  stringstream sb;
-  st << chanHex << "0000" << uppercase << setfill('0') << setw(4) << hex << top;
-  sb << chanHex << "0001" << uppercase << setfill('0') << setw(4) << hex << bot;
-  sendFrame(st.str());
-  sendFrame(sb.str());
+  setMemory(channel, 0, top);
+  setMemory(channel, 1, bot);
 }
 
 // takes in data received from app
-// - shape: 0 = sine, 1 = square, 2 = triangle, 3 = sinc
-// - frequency (0 to 100000000 mHz), amplitude (0 to 10000 mV), offset (-5000 to 5000 mV)
-// - channel: false = Channel0, true = Channel1
+// - shape:   0 = sine,   1 = square,   2 = triangle,   3 = sinc,   4 = arbitrary
+// - frequency (0 to 100000000 mHz),   amplitude (0 to 10000 mV),   offset (-5000 to 5000 mV)
+// - channel:   false = Channel0,   true = Channel1
 void setAll(int shape, int frequency, int amplitude, int offset, bool channel) {
 
   // determine high or low frequency
@@ -233,27 +227,17 @@ void setAll(int shape, int frequency, int amplitude, int offset, bool channel) {
     // low frequency, variable tuning word
 
     width = 65535; // Use max width of 2^16
-    if (channel) sendFrame("3FFFFFFFF"); else sendFrame("2FFFFFFFF"); // set reset to 2^16
-    int tw = frequency*(2^48)/100000000000;
-
-    // set tuning word
-    char chanHex = channel ? '5' : '4';
-    stringstream ss;
-    ss << chanHex << uppercase << setfill('0') << setw(8) << hex << tw;
-    sendFrame(ss.str());
+    setReset(channel, 65535);
+    // int tw = frequency*(1 << 48)/100000000000;
+    int tw = frequency*1407.37488;
+    setTuningWord(channel, tw);
 
   } else {
     // high frequency, variable reset
 
-    if (channel) sendFrame("5028F5C29"); else sendFrame("4028F5C29"); // set sample rate to 1 MHz
     width = 1000000000/frequency;
-    
-    // set reset
-    char chanHex = channel ? '3' : '2';
-    stringstream ss;
-    ss << chanHex << uppercase << setfill('0') << setw(4) << hex << width << "FFFF";
-    sendFrame(ss.str());
-
+    setReset(channel, width);
+    setTuningWord(channel, 21474836); // set tuning word to 1 MHz, 0.01(2^31) = 21474836
   }
 
   // call function to generate shape
@@ -270,10 +254,13 @@ void setAll(int shape, int frequency, int amplitude, int offset, bool channel) {
     case 3:
       createSnc(channel, width, amplitude, offset);
       break;
+    case 4:
+      // arbitrary waveform
+      break;
   }
 
   // start waveform generation
-  sendFrame("7FFFFFFFF");
+  run();
 }
 
 void setup() {
@@ -291,16 +278,42 @@ void setup() {
   delayMicroseconds(20);
   digitalWrite(rstn, HIGH);
 
-  setAll(0, 1000000, 5000, 1000, 0);
-  // setAll(0, 1000000, 5000, 1000, 1);
+  setAll(0, 230*1000, 5*1000, 0*1000, false);
+  // delay(5000);
+  // setReset(true, 4347);
+  // run();
+  // delay(5000);
+  // setReset(true, 4347/2);
+  // run();
 
-  //=// square wave //=//
-  // sendFrame("30001FFFF");
-  // // // sendFrame("43FFFFFFF");
-  // sendFrame("50FFFFFFF");
-  // sendFrame("100000000");
-  // sendFrame("10001FFFF");
-  // sendFrame("7FFFFFFFF");
+  // // 15 -> 240 repeating memory??????
+  // // 244 = 4096 = 2^12????
+  // // memory transfer at 65k too slow
+
+  // setAll(1, 1000*1000, 10*1000, 0*1000, true);
+  // // sqaure works
+  // setAll(1, 0.024*1000, 10*1000, 0*1000, true);
+  // // works at very low frequency, about 1 cycle every 42 seconds
+  // setAll(1, 100000*1000, 0.1*1000, 5*1000, true);
+  // // works at very high frequency
+
+  // setAll(2, 1000*1000, 5*1000, 0*1000, true);
+  // tri doesn't work at all
+
+  // setAll(3, 1000*1000, 10*1000, -2*1000, true);
+  // // sinc works, but equation needs adjustment
+  // setAll(3, 10000*1000, 10*1000, -2*1000, true);
+  // // works, test higher later
+  // setAll(3, 100*1000, 10*1000, -2*1000, true);
+
+  
+
+  // //=// square wave //=//
+  // setReset(true, 1);
+  // setTuningWord(true, 4095);
+  // setMemory(true, 0, 65535);
+  // setMemory(true, 1, 0);
+  // run();
 
   // sendFrame("20001FFFF");
   // sendFrame("4000FFFFF");
@@ -326,37 +339,19 @@ void setup() {
 
 void loop() {
 
-  // digitalWrite(rstn, LOW);
-  // delay(100);
-  // digitalWrite(rstn, HIGH);
-  // sendFrame("20004FFFF"); // set reset0 to 4
-  // sendFrame("30003FFFF"); // set reset1 to 3
-  // sendFrame("400FFFFFF"); // set phase0
-  // sendFrame("5000FFFFF"); // set phase1
-  // sendFrame("000009999"); // set SRAM0 values
-  // sendFrame("00001AAAA");
-  // sendFrame("00002BBBB");
-  // sendFrame("00003CCCC");
-  // sendFrame("00004DDDD");
-  // sendFrame("100000000"); // set SRAM1 values
-  // sendFrame("100011111"); 
-  // sendFrame("100022222"); 
-  // sendFrame("100033333"); 
-  // sendFrame("7FFFFFFFF"); // run
-  // delay(5000);
-  // sendFrame("20001FFFF"); // set reset0 to 1
-  // sendFrame("30002FFFF"); // set reset1 to 2
-  // sendFrame("000001111");
-  // sendFrame("100009999"); 
-  // sendFrame("100018888"); 
-  // sendFrame("100027777"); 
-  // sendFrame("4007FFFFF"); // slow down clock0 by 1/2
-  // sendFrame("7FFFFFFFF"); // run
-  // delay(5000);
+  // setAll(0, 1000000, 4000, 1000, 1);
+  // delay(2000);
+  // setAll(0, 1000000, 8000, 1000, 1);
+  // delay(2000);
+  // setTuningWord(1, 10737418);
+  // run();
+  // delay(2000);
+  // setTuningWord(1, 42949672);
+  // run();
+  // delay(2000);
 
-  setAll(0, 1000000, 4000, 1000, 1);
-  delay(2000);
-  setAll(0, 1000000, 8000, 1000, 1);
-  delay(2000);
+  // setAll(1, 230*1000, 5*1000, 0*1000, true);
+  // delay(2000);
+
 
 }
